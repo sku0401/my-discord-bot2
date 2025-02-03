@@ -108,7 +108,7 @@ async def on_command_error(ctx, error):
 # ボットの起動処理
 def run_bot():
     try:
-        token = os.getenv('my_token')
+        token = os.getenv('MTMyMDI3MjkxMzY5NzYwNzc2Mg.GkqTGU.wIYlIgkZEzbD3YQBHdAXm5uWnfiPGEvxOIwqWU')
         if not token:
             raise ValueError("トークンが設定されていません。環境変数 'my_token' を確認してください。")
         bot.run(token)
