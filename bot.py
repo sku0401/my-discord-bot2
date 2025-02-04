@@ -3,36 +3,29 @@ from discord.ext import commands
 import os
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import random
-from dotenv import load_dotenv  # dotenv を使って環境変数を読み込む
+from dotenv import dotenv_values
 
 # .env を読み込む
-load_dotenv()
-TOKEN = os.getenv("DISCORD_TOKEN")
+config = dotenv_values(".env")
+TOKEN = config.get("DISCORD_TOKEN")
+
+if not TOKEN:
+    raise ValueError("DISCORD_TOKEN が設定されていません。")
 
 # Discordボット設定
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# モデルと会話ログの初期化
-tokenizer = None
-model = None
-conversation_log = []
-
-# モデルのロードとボット起動確認
-@bot.event
-async def on_ready():
-    global tokenizer, model
-    if tokenizer is None or model is None:
-        print("モデルをロードしています...")
-        tokenizer = AutoTokenizer.from_pretrained("rinna/japanese-gpt-1b", use_fast=False)
-        model = AutoModelForCausalLM.from_pretrained("rinna/japanese-gpt-1b")
-    print(f"Logged in as {bot.user.name}")
+# モデルの事前ロード
+print("モデルをロードしています...")
+tokenizer = AutoTokenizer.from_pretrained("rinna/japanese-gpt-1b", use_fast=False)
+model = AutoModelForCausalLM.from_pretrained("rinna/japanese-gpt-1b")
+print("モデルのロードが完了しました！")
 
 # 会話コマンド
 @bot.tree.command(name="talk", description="会話をする")
 async def talk(interaction: discord.Interaction, user_input: str):
-    conversation_log.append(f"User: {user_input}")
     inputs = tokenizer(user_input, return_tensors="pt")
     outputs = model.generate(
         inputs['input_ids'],
@@ -43,7 +36,11 @@ async def talk(interaction: discord.Interaction, user_input: str):
         temperature=0.8
     )
     response = tokenizer.decode(outputs[0], skip_special_tokens=True)[:2000]
-    conversation_log.append(f"Bot: {response}")
+
+    # ログをファイルに保存
+    with open("conversation_log.txt", "a", encoding="utf-8") as f:
+        f.write(f"User: {user_input}\nBot: {response}\n")
+
     await interaction.response.send_message(response)
 
 # ガチャコマンド
@@ -64,7 +61,7 @@ async def nyan(interaction: discord.Interaction):
 @bot.tree.command(name="dice", description="指定したダイスのロールを行う（例：2d6）")
 async def dice(interaction: discord.Interaction, dice_input: str):
     try:
-        num_dice, dice_sides = map(int, dice_input.split('d'))
+        num_dice, dice_sides = map(int, dice_input.lower().split('d'))
         rolls = [random.randint(1, dice_sides) for _ in range(num_dice)]
         total = sum(rolls)
         roll_result = ', '.join(map(str, rolls))
@@ -78,33 +75,27 @@ async def janken(interaction: discord.Interaction, user_hand: str):
     if user_hand not in ["グー", "チョキ", "パー"]:
         await interaction.response.send_message("正しい手を入力してください: グー, チョキ, パー")
         return
+    
     hands = ["グー", "チョキ", "パー"]
     bot_hand = random.choice(hands)
-    if user_hand == bot_hand:
-        result = "あいこ！"
-    elif (user_hand == "グー" and bot_hand == "チョキ") or \
-         (user_hand == "チョキ" and bot_hand == "パー") or \
-         (user_hand == "パー" and bot_hand == "グー"):
-        result = "あなたの勝ち！"
-    else:
-        result = "あなたの負け！"
+
+    results = {
+        ("グー", "チョキ"): "あなたの勝ち！",
+        ("チョキ", "パー"): "あなたの勝ち！",
+        ("パー", "グー"): "あなたの勝ち！",
+        ("チョキ", "グー"): "あなたの負け！",
+        ("パー", "チョキ"): "あなたの負け！",
+        ("グー", "パー"): "あなたの負け！"
+    }
+
+    result = results.get((user_hand, bot_hand), "あいこ！")
     await interaction.response.send_message(f"ボットの手: {bot_hand} - {result}")
 
-# 会話ログ保存コマンド
-@bot.tree.command(name="save_log", description="会話ログを保存する")
-async def save_log(interaction: discord.Interaction):
-    log_path = "conversation_log.txt"
-    try:
-        with open(log_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(conversation_log))
-        await interaction.response.send_message(f"会話ログを{log_path}に保存しました！")
-    except Exception as e:
-        await interaction.response.send_message(f"ログ保存中にエラーが発生しました: {e}")
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user.name}")
 
-# ボットの起動処理
 def run_bot():
-    if not TOKEN:
-        raise ValueError("トークンが設定されていません。")
     bot.run(TOKEN)
 
 if __name__ == "__main__":
