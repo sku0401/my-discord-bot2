@@ -2,3 +2,4 @@ discord.py
 transformers
 torch
 python-dotenv
+sentencepiece
