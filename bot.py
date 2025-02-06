@@ -33,7 +33,7 @@ async def talk(interaction: discord.Interaction, user_input: str):
         inputs = tokenizer(user_input, return_tensors="pt")
         outputs = model.generate(
             inputs['input_ids'],
-            max_length=100,
+            max_length=50,  # max_lengthを短く設定
             num_return_sequences=1,
             do_sample=True,
             top_p=0.9,
@@ -100,5 +100,5 @@ async def janken(interaction: discord.Interaction, user_hand: str):
 def run_bot():
     bot.run(TOKEN)
 
-if __name__ == "__main__":
+if __name__ == "__main__": 
     run_bot()
