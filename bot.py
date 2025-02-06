@@ -3,14 +3,12 @@ from discord.ext import commands
 import os
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import random
-from dotenv import dotenv_values
 
-# .env を読み込む
-config = dotenv_values(".env")
-TOKEN = config.get("DISCORD_TOKEN")
+# 環境変数からトークンを取得
+TOKEN = os.getenv("DISCORD_TOKEN")
 
 if not TOKEN:
-    raise ValueError("DISCORD_TOKEN が設定されていません。")
+    raise ValueError("DISCORD_TOKEN が設定されていません。環境変数を確認してください。")
 
 # Discordボット設定
 intents = discord.Intents.default()
@@ -23,20 +21,28 @@ tokenizer = AutoTokenizer.from_pretrained("rinna/japanese-gpt-1b", use_fast=Fals
 model = AutoModelForCausalLM.from_pretrained("rinna/japanese-gpt-1b")
 print("モデルのロードが完了しました！")
 
+@bot.event
+async def on_ready():
+    await bot.tree.sync()  # スラッシュコマンドを同期
+    print(f"Logged in as {bot.user.name}")
+
 # 会話コマンド
 @bot.tree.command(name="talk", description="会話をする")
 async def talk(interaction: discord.Interaction, user_input: str):
-    inputs = tokenizer(user_input, return_tensors="pt")
-    outputs = model.generate(
-        inputs['input_ids'],
-        max_length=100,
-        num_return_sequences=1,
-        do_sample=True,
-        top_p=0.9,
-        temperature=0.8
-    )
-    response = tokenizer.decode(outputs[0], skip_special_tokens=True)[:2000]
-
+    try:
+        inputs = tokenizer(user_input, return_tensors="pt")
+        outputs = model.generate(
+            inputs['input_ids'],
+            max_length=100,
+            num_return_sequences=1,
+            do_sample=True,
+            top_p=0.9,
+            temperature=0.8
+        )
+        response = tokenizer.decode(outputs[0], skip_special_tokens=True)[:2000]
+    except Exception as e:
+        response = f"エラーが発生しました: {str(e)}"
+    
     # ログをファイルに保存
     with open("conversation_log.txt", "a", encoding="utf-8") as f:
         f.write(f"User: {user_input}\nBot: {response}\n")
@@ -61,7 +67,7 @@ async def nyan(interaction: discord.Interaction):
 @bot.tree.command(name="dice", description="指定したダイスのロールを行う（例：2d6）")
 async def dice(interaction: discord.Interaction, dice_input: str):
     try:
-        num_dice, dice_sides = map(int, dice_input.lower().split('d'))
+        num_dice, dice_sides = map(int, dice_input.split('d'))
         rolls = [random.randint(1, dice_sides) for _ in range(num_dice)]
         total = sum(rolls)
         roll_result = ', '.join(map(str, rolls))
@@ -90,10 +96,6 @@ async def janken(interaction: discord.Interaction, user_hand: str):
 
     result = results.get((user_hand, bot_hand), "あいこ！")
     await interaction.response.send_message(f"ボットの手: {bot_hand} - {result}")
-
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user.name}")
 
 def run_bot():
     bot.run(TOKEN)
