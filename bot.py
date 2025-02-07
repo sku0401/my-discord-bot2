@@ -2,8 +2,6 @@ import discord
 from discord.ext import commands
 import os
 import random
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # 環境変数からトークンを取得
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -16,25 +14,13 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# 軽量化した日本語モデルを指定
-MODEL_NAME = "rinna/japanese-gpt-neo-125M"
-
-# モデルを遅延ロード（Lazy Load）
-tokenizer = None
-model = None
-
-# メモリ節約のためにロードを遅延
-def load_model():
-    global tokenizer, model
-    if tokenizer is None or model is None:
-        print("モデルをロードしています...")
-        tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=False)
-        model = AutoModelForCausalLM.from_pretrained(
-            MODEL_NAME, 
-            device_map="auto",  # 自動で最適なデバイスに配置
-            torch_dtype=torch.float16  # メモリ節約のためにfloat16を使用
-        )
-        print("モデルのロードが完了しました！")
+# 軽量なモデルのロード
+print("軽量モデルをロードしています...")
+# 軽量なトークン化とモデル（変更）
+from transformers import AutoModelForCausalLM, AutoTokenizer
+tokenizer = AutoTokenizer.from_pretrained("rinna/japanese-gpt2-small", use_fast=False)
+model = AutoModelForCausalLM.from_pretrained("rinna/japanese-gpt2-small")
+print("モデルのロードが完了しました！")
 
 @bot.event
 async def on_ready():
@@ -45,11 +31,10 @@ async def on_ready():
 @bot.tree.command(name="talk", description="会話をする")
 async def talk(interaction: discord.Interaction, user_input: str):
     try:
-        load_model()  # コマンド実行時に初めてモデルをロード
-        inputs = tokenizer(user_input, return_tensors="pt").to("cpu")  # CPUで実行
+        inputs = tokenizer(user_input, return_tensors="pt")
         outputs = model.generate(
             inputs['input_ids'],
-            max_length=50,  # max_lengthを短くしてメモリ削減
+            max_length=50,  # より短く設定
             num_return_sequences=1,
             do_sample=True,
             top_p=0.9,
@@ -59,10 +44,6 @@ async def talk(interaction: discord.Interaction, user_input: str):
     except Exception as e:
         response = f"エラーが発生しました: {str(e)}"
     
-    # ログをファイルに保存
-    with open("conversation_log.txt", "a", encoding="utf-8") as f:
-        f.write(f"User: {user_input}\nBot: {response}\n")
-
     await interaction.response.send_message(response)
 
 # ガチャコマンド
@@ -116,5 +97,5 @@ async def janken(interaction: discord.Interaction, user_hand: str):
 def run_bot():
     bot.run(TOKEN)
 
-if __name__ == "__main__": 
+if __name__ == "__main__":
     run_bot()
