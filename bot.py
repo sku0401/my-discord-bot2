@@ -3,6 +3,9 @@ from discord.ext import commands
 import os
 import random
 import torch
+import datetime
+import time
+import sys
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # 環境変数からトークンを取得
@@ -37,7 +40,26 @@ async def on_ready():
     await bot.tree.sync()  # スラッシュコマンドを同期
     print(f"Logged in as {bot.user.name}")
 
-# 会話コマンド
+# **⏳ 指定時間外ならボットを停止する関数**
+def is_within_active_hours():
+    """現在の時刻が 6:00 ～ 22:00 の範囲内か確認"""
+    now = datetime.datetime.now().hour
+    return 6 <= now < 22
+
+async def shutdown_if_outside_hours():
+    """指定時間外になったらボットを停止"""
+    while True:
+        if not is_within_active_hours():
+            print("指定時間外になったためボットを終了します。")
+            await bot.close()
+            sys.exit()  # プロセスを終了
+        await asyncio.sleep(60 * 10)  # 10分ごとにチェック
+
+@bot.event
+async def on_ready():
+    bot.loop.create_task(shutdown_if_outside_hours())
+
+# **各種コマンド**
 @bot.tree.command(name="talk", description="会話をする")
 async def talk(interaction: discord.Interaction, user_input: str):
     if model is None:
@@ -66,21 +88,18 @@ async def talk(interaction: discord.Interaction, user_input: str):
 
     await interaction.response.send_message(response)
 
-# ガチャコマンド
 @bot.tree.command(name="gacha", description="ガチャを引く")
 async def gacha(interaction: discord.Interaction):
     items = ["決意", "忍耐", "勇気", "誠実", "不屈", "親切", "正義"]
     result = random.choice(items)
     await interaction.response.send_message(f"あなたが引いたのは: {result}！")
 
-# にゃんコマンド
 @bot.tree.command(name="nyan", description="猫のように応答する")
 async def nyan(interaction: discord.Interaction):
     responses = ["にゃ～ん！", "にゃんにゃん♪", "ゴロゴロ…にゃん！"]
     response = random.choice(responses)
     await interaction.response.send_message(response)
 
-# ダイスロールコマンド
 @bot.tree.command(name="dice", description="指定したダイスのロールを行う（例：2d6）")
 async def dice(interaction: discord.Interaction, dice_input: str):
     try:
@@ -92,7 +111,6 @@ async def dice(interaction: discord.Interaction, dice_input: str):
     except ValueError:
         await interaction.response.send_message("入力形式が正しくありません。正しい形式は「○d○」です。例: 2d6")
 
-# じゃんけんコマンド
 @bot.tree.command(name="janken", description="じゃんけんをする (グー, チョキ, パー)")
 async def janken(interaction: discord.Interaction, user_hand: str):
     if user_hand not in ["グー", "チョキ", "パー"]:
@@ -114,8 +132,12 @@ async def janken(interaction: discord.Interaction, user_hand: str):
     result = results.get((user_hand, bot_hand), "あいこ！")
     await interaction.response.send_message(f"ボットの手: {bot_hand} - {result}")
 
+# **ボットを実行**
 def run_bot():
     bot.run(TOKEN)
 
 if __name__ == "__main__":
-    run_bot()
+    if is_within_active_hours():
+        run_bot()
+    else:
+        print("現在、指定時間外のため起動しません。")
