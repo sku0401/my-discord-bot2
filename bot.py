@@ -2,6 +2,8 @@ import discord
 from discord.ext import commands
 import os
 import random
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # 環境変数からトークンを取得
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -16,11 +18,19 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # 軽量なモデルのロード
 print("軽量モデルをロードしています...")
-# 軽量なトークン化とモデル（変更）
-from transformers import AutoModelForCausalLM, AutoTokenizer
-tokenizer = AutoTokenizer.from_pretrained("rinna/japanese-gpt2-small", use_fast=False)
-model = AutoModelForCausalLM.from_pretrained("rinna/japanese-gpt2-small")
-print("モデルのロードが完了しました！")
+try:
+    tokenizer = AutoTokenizer.from_pretrained("rinna/japanese-gpt2-small", use_fast=False)
+    model = AutoModelForCausalLM.from_pretrained("rinna/japanese-gpt2-small")
+
+    # **メモリ削減設定**
+    model.half()  # 半精度化 (float16)
+    model.to("cpu")  # CPUへ移動
+    model.eval()  # 推論モード
+    print("モデルのロードが完了しました！")
+
+except Exception as e:
+    print(f"モデルのロード中にエラー: {e}")
+    model = None  # モデルが読み込めなかった場合の対策
 
 @bot.event
 async def on_ready():
@@ -30,20 +40,30 @@ async def on_ready():
 # 会話コマンド
 @bot.tree.command(name="talk", description="会話をする")
 async def talk(interaction: discord.Interaction, user_input: str):
+    if model is None:
+        await interaction.response.send_message("現在、会話機能は利用できません（モデルのロードに失敗しました）。")
+        return
+
     try:
         inputs = tokenizer(user_input, return_tensors="pt")
-        outputs = model.generate(
-            inputs['input_ids'],
-            max_length=50,  # より短く設定
-            num_return_sequences=1,
-            do_sample=True,
-            top_p=0.9,
-            temperature=0.8
-        )
+
+        with torch.no_grad():  # メモリ最適化
+            outputs = model.generate(
+                inputs['input_ids'],
+                max_length=30,  # **出力を短縮してメモリ削減**
+                num_return_sequences=1,
+                do_sample=True,
+                top_p=0.9,
+                temperature=0.8
+            )
         response = tokenizer.decode(outputs[0], skip_special_tokens=True)[:2000]
+
+    except torch.cuda.OutOfMemoryError:
+        response = "メモリ不足のため応答できません。"
+
     except Exception as e:
         response = f"エラーが発生しました: {str(e)}"
-    
+
     await interaction.response.send_message(response)
 
 # ガチャコマンド
