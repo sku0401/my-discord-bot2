@@ -1,5 +1,3 @@
-discord.py
-transformers
+discord
 torch
-python-dotenv
-sentencepiece
+transformers
