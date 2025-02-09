@@ -6,6 +6,7 @@ import torch
 import datetime
 import time
 import sys
+import asyncio  # ⬅️ **追加**
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # 環境変数からトークンを取得
@@ -35,11 +36,6 @@ except Exception as e:
     print(f"モデルのロード中にエラー: {e}")
     model = None  # モデルが読み込めなかった場合の対策
 
-@bot.event
-async def on_ready():
-    await bot.tree.sync()  # スラッシュコマンドを同期
-    print(f"Logged in as {bot.user.name}")
-
 # **⏳ 指定時間外ならボットを停止する関数**
 def is_within_active_hours():
     """現在の時刻が 6:00 ～ 22:00 の範囲内か確認"""
@@ -57,7 +53,10 @@ async def shutdown_if_outside_hours():
 
 @bot.event
 async def on_ready():
-    bot.loop.create_task(shutdown_if_outside_hours())
+    """ボット起動時に呼ばれる"""
+    await bot.tree.sync()  # スラッシュコマンドを同期
+    print(f"Logged in as {bot.user.name}")
+    bot.loop.create_task(shutdown_if_outside_hours())  # ⬅️ **ここで時間監視を開始**
 
 # **各種コマンド**
 @bot.tree.command(name="talk", description="会話をする")
