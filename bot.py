@@ -6,6 +6,19 @@ import torch
 import datetime
 import asyncio
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from flask import Flask
+import threading
+
+# Flaskアプリの作成
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Bot is running!"
+
+def run_flask():
+    """Flaskを起動し、RenderがWebサービスとして認識するようにする"""
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
 
 # 環境変数からトークンを取得
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -24,7 +37,7 @@ try:
     tokenizer = AutoTokenizer.from_pretrained("rinna/japanese-gpt2-small", use_fast=False)
     model = AutoModelForCausalLM.from_pretrained("rinna/japanese-gpt2-small")
 
-    # **メモリ削減設定**
+    # メモリ削減設定
     model.half()  # 半精度化 (float16)
     model.to("cpu")  # CPUへ移動
     model.eval()  # 推論モード
@@ -34,7 +47,7 @@ except Exception as e:
     print(f"モデルのロード中にエラー: {e}")
     model = None  # モデルが読み込めなかった場合の対策
 
-# **⏳ 指定時間外ならボットを停止する関数**
+# 指定時間外ならボットを停止する関数
 def is_within_active_hours():
     """現在の時刻が 6:00 ～ 22:00 の範囲内か確認"""
     now = datetime.datetime.now().hour
@@ -46,17 +59,17 @@ async def shutdown_if_outside_hours():
         if not is_within_active_hours():
             print("指定時間外になったためボットを終了します。")
             await bot.close()
-            sys.exit()  # プロセスを終了
-        await asyncio.sleep(60 * 10)  # 10分ごとにチェック
+            os._exit(0)  # プロセスを終了
+        await asyncio.sleep(600)  # 10分ごとにチェック
 
 @bot.event
 async def on_ready():
     """ボット起動時に呼ばれる"""
     await bot.tree.sync()  # スラッシュコマンドを同期
     print(f"Logged in as {bot.user.name}")
-    bot.loop.create_task(shutdown_if_outside_hours())  # ⬅️ **ここで時間監視を開始**
+    asyncio.create_task(shutdown_if_outside_hours())  # 時間監視を開始
 
-# **各種コマンド**
+# 各種コマンド
 @bot.tree.command(name="talk", description="会話をする")
 async def talk(interaction: discord.Interaction, user_input: str):
     if model is None:
@@ -69,7 +82,7 @@ async def talk(interaction: discord.Interaction, user_input: str):
         with torch.no_grad():  # メモリ最適化
             outputs = model.generate(
                 inputs['input_ids'],
-                max_length=30,  # **出力を短縮してメモリ削減**
+                max_length=30,
                 num_return_sequences=1,
                 do_sample=True,
                 top_p=0.9,
@@ -129,4 +142,8 @@ async def janken(interaction: discord.Interaction, user_hand: str):
     result = results.get((user_hand, bot_hand), "あいこ！")
     await interaction.response.send_message(f"あなた: {user_hand} - ボット: {bot_hand}\n結果: {result}")
 
+# Flaskを別スレッドで実行
+threading.Thread(target=run_flask).start()
+
+# Discord Bot を実行
 bot.run(TOKEN)
