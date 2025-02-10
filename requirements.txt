@@ -1,6 +1,9 @@
 discord.py==2.0.0
 torch==1.13.0
-transformers==4.18.0
-tokenizers==0.12.1
+transformers==4.14.1
+tokenizers==0.10.3
 numpy
+pip
+setuptools
+wheel
 --prefer-binary
