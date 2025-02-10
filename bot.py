@@ -6,7 +6,7 @@ import torch
 import datetime
 import time
 import sys
-import asyncio  # ⬅️ **追加**
+import asyncio
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # 環境変数からトークンを取得
@@ -26,7 +26,7 @@ try:
     tokenizer = AutoTokenizer.from_pretrained("rinna/japanese-gpt2-small", use_fast=False)
     model = AutoModelForCausalLM.from_pretrained("rinna/japanese-gpt2-small")
 
-    # **メモリ削減設定**
+    # メモリ削減設定
     model.half()  # 半精度化 (float16)
     model.to("cpu")  # CPUへ移動
     model.eval()  # 推論モード
@@ -36,7 +36,7 @@ except Exception as e:
     print(f"モデルのロード中にエラー: {e}")
     model = None  # モデルが読み込めなかった場合の対策
 
-# **⏳ 指定時間外ならボットを停止する関数**
+# ⏳ 指定時間外ならボットを停止する関数
 def is_within_active_hours():
     """現在の時刻が 6:00 ～ 22:00 の範囲内か確認"""
     now = datetime.datetime.now().hour
@@ -58,7 +58,7 @@ async def on_ready():
     print(f"Logged in as {bot.user.name}")
     bot.loop.create_task(shutdown_if_outside_hours())  # ⬅️ **ここで時間監視を開始**
 
-# **各種コマンド**
+# 各種コマンド
 @bot.tree.command(name="talk", description="会話をする")
 async def talk(interaction: discord.Interaction, user_input: str):
     if model is None:
@@ -71,7 +71,7 @@ async def talk(interaction: discord.Interaction, user_input: str):
         with torch.no_grad():  # メモリ最適化
             outputs = model.generate(
                 inputs['input_ids'],
-                max_length=30,  # **出力を短縮してメモリ削減**
+                max_length=30,  # 出力を短縮してメモリ削減
                 num_return_sequences=1,
                 do_sample=True,
                 top_p=0.9,
@@ -131,7 +131,7 @@ async def janken(interaction: discord.Interaction, user_hand: str):
     result = results.get((user_hand, bot_hand), "あいこ！")
     await interaction.response.send_message(f"ボットの手: {bot_hand} - {result}")
 
-# **ボットを実行**
+# ボットを実行
 def run_bot():
     bot.run(TOKEN)
 
