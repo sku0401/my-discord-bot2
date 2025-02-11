@@ -5,8 +5,6 @@ import asyncio
 import os
 from dotenv import load_dotenv
 from flask import Flask
-from datetime import datetime
-import time
 
 # .envファイルを読み込む
 load_dotenv()
@@ -25,7 +23,7 @@ tone = "normal"
 
 # ランダムな会話リスト
 talk_responses = [
-   "こんにちはっ！元気だった？",
+    "こんにちはっ！元気だった？",
     "やっほ～！今日はどんな一日だったかな？",
     "お疲れさま～！今日はどうだった？",
     "こんちゃ～！最近何か楽しいことあった？",
@@ -81,11 +79,6 @@ def get_tone_response(response):
         return "お疲れ様です。何かお話があればお聞きします。"
     return response + " なんだか嬉しいな～"
 
-# 時間帯に基づいてボットを動作させる関数
-def check_active_time():
-    current_hour = datetime.now().hour
-    return 6 <= current_hour < 22
-
 # ボット準備完了時の処理
 @bot.event
 async def on_ready():
@@ -96,10 +89,6 @@ async def on_ready():
 @bot.event
 async def on_message(message):
     if message.author.bot:
-        return
-
-    # 時間帯外なら無視
-    if not check_active_time():
         return
 
     if bot.user in message.mentions:
@@ -126,57 +115,41 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-# コマンド群
+# /talk コマンド
 @bot.tree.command(name="talk", description="ランダムでおっとり系の会話をする")
 async def talk(interaction: discord.Interaction):
-    if not check_active_time():
-        await interaction.response.send_message("この時間はお休み中だよ～。また後で話そうね！")
-        return
-
     response = get_tone_response(random.choice(talk_responses))
     await interaction.response.send_message(response)
 
+# /gacha コマンド
 @bot.tree.command(name="gacha", description="ガチャを引いて結果を表示")
 async def gacha(interaction: discord.Interaction):
-    if not check_active_time():
-        await interaction.response.send_message("今はお休み時間だよ～。後でガチャ引こうね！")
-        return
-
     items = ["決意", "忍耐", "勇気", "誠実", "不屈", "親切", "正義"]
     result = random.choice(items)
-    await interaction.response.send_message(f"わぁ～！あなたが引いたのは「{result}」だよ～！一緒に頑張ろうね！")
+    await interaction.response.send_message(f"わぁ～！あなたが引いたのは「{result}」だよ～！")
 
+# /nyan コマンド
 @bot.tree.command(name="nyan", description="猫のように応答する")
 async def nyan(interaction: discord.Interaction):
-    if not check_active_time():
-        await interaction.response.send_message("今はお休み中だにゃ～。また後でね！")
-        return
-
     responses = ["にゃ～ん！", "にゃんにゃん♪", "ゴロゴロ…にゃん！", "にゃ～ん、いっしょに遊ぼうよ！"]
     response = random.choice(responses)
     await interaction.response.send_message(response)
 
+# /dice コマンド
 @bot.tree.command(name="dice", description="指定したダイスをロールして結果を表示")
 async def dice(interaction: discord.Interaction, dice_input: str):
-    if not check_active_time():
-        await interaction.response.send_message("今はお休み中だよ～。またダイスロールしようね！")
-        return
-
     try:
         num_dice, dice_sides = map(int, dice_input.split('d'))
         rolls = [random.randint(1, dice_sides) for _ in range(num_dice)]
         total = sum(rolls)
         roll_result = ', '.join(map(str, rolls))
-        await interaction.response.send_message(f"ロール結果は：{roll_result} (合計: {total}) だよ～！ワクワクしちゃうね！")
+        await interaction.response.send_message(f"ロール結果は：{roll_result} (合計: {total}) だよ～！")
     except ValueError:
         await interaction.response.send_message("うーん、入力形式が違うみたい。「2d6」みたいに入力してね！")
 
+# /janken コマンド
 @bot.tree.command(name="janken", description="じゃんけんをする (グー, チョキ, パー)")
 async def janken(interaction: discord.Interaction, user_hand: str):
-    if not check_active_time():
-        await interaction.response.send_message("この時間はじゃんけんできないよ～。また後でね！")
-        return
-
     if user_hand not in ["グー", "チョキ", "パー"]:
         await interaction.response.send_message("「グー」「チョキ」「パー」から選んでね！")
         return
@@ -190,42 +163,37 @@ async def janken(interaction: discord.Interaction, user_hand: str):
         ("パー", "グー"): "あなたの勝ち～！おめでとう！",
         ("チョキ", "グー"): "あなたの負けだよ～。また挑戦してね！",
         ("パー", "チョキ"): "あなたの負けだよ～。次頑張ろうね！",
-        ("グー", "パー"): "あなたの負けだよ～。次はきっと勝てるよ！"
+        ("グー", "パー"): "あなたの負けだよ～。次はどうかな〜？"
     }
 
-    result = results.get((user_hand, bot_hand), "あいこだね～！もう一回しようよ！")
+    result = results.get((user_hand, bot_hand), "あいこだね～！")
     await interaction.response.send_message(f"あなた: {user_hand} - ボット: {bot_hand}\n結果: {result}")
 
-@bot.tree.command(name="hug", description="抱きしめる")
-async def hug(interaction: discord.Interaction, user: discord.User):
-    if not check_active_time():
-        await interaction.response.send_message("今はお休み中だよ～。また後でね！")
-        return
-
+# /compliment コマンド
+@bot.tree.command(name="compliment", description="褒めるメッセージをランダムで表示")
+async def compliment(interaction: discord.Interaction):
     responses = [
-        f"{user.mention}をぎゅーっ～！温かいね！",
-        f"{user.mention}、ぎゅっ！ほっこりしちゃうね♪",
-        f"隙あり！{user.mention}！ぎゅー！"
+        "すごいね～！あなたって本当に素敵だな♪",
+        "うわぁ、あなたってなんて凄いんだろう！",
+        "あっ、あなたの笑顔最高！癒される～",
+        "よく頑張ったね！すごいよ～！"
     ]
-    await interaction.response.send_message(random.choice(responses))
+    response = random.choice(responses)
+    await interaction.response.send_message(response)
 
-@bot.tree.command(name="sleep", description="眠くなって寝る")
+# /hug コマンド
+@bot.tree.command(name="hug", description="ハグをランダムで送る")
+async def hug(interaction: discord.Interaction):
+    responses = ["ギュー！", "ふふっ、ぎゅっ！"]
+    response = random.choice(responses)
+    await interaction.response.send_message(response)
+
+# /sleep コマンド
+@bot.tree.command(name="sleep", description="おやすみメッセージを送る")
 async def sleep(interaction: discord.Interaction):
-    if not check_active_time():
-        await interaction.response.send_message("この時間は眠くなっちゃうから寝るね～。おやすみ～！")
-        return
-
-    responses = [
-        "ねむねむ…おやすみなさい～！",
-        "今日はお疲れさま！おやすみ～。",
-        "もう眠いよ～。おやすみなさい～。"
-    ]
-    await interaction.response.send_message(random.choice(responses))
-
-# コマンドごとの休止時間を考慮
-def check_active_time():
-    current_hour = datetime.now().hour
-    return 6 <= current_hour < 22
+    responses = ["おやすみ～！いい夢を見てね！", "ぐっすり眠ってね～！", "おやすみなさい！ゆっくり休んでね～"]
+    response = random.choice(responses)
+    await interaction.response.send_message(response)
 
 # Flask部分
 app = Flask(__name__)
@@ -234,7 +202,9 @@ app = Flask(__name__)
 def home():
     return "Bot is running!"
 
-# Discord Bot を実行
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
-    bot.run(TOKEN)
+    port = int(os.getenv("PORT", 8080))  # 環境変数 PORT があればそれを使う
+    app.run(host="0.0.0.0", port=port)
+
+# Discord Bot を実行
+bot.run(TOKEN)
