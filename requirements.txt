@@ -1,9 +1,4 @@
-discord.py==2.3.2
-flask==2.2.5
-transformers==4.30.0
-torch>=2.0.0
-tokenizers==0.13.3
-setuptools>=65.5.0
-wheel
-sentencepiece
-protobuf==3.20.*
+discord.py==2.0.1
+torch==1.13.1
+transformers==4.28.0
+Flask==2.3.2
