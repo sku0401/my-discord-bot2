@@ -1,6 +1,6 @@
 discord.py==2.3.2
 flask==2.2.5
-transformers>=4.38.0
+transformers==4.30.0
 torch>=2.0.0
 tokenizers>=0.14.1
 setuptools>=65.5.0
