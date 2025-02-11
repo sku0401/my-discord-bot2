@@ -4,6 +4,7 @@ import random
 import asyncio
 import os
 from dotenv import load_dotenv
+from flask import Flask
 
 # .envファイルを読み込む
 load_dotenv()
@@ -193,6 +194,17 @@ async def sleep(interaction: discord.Interaction):
     responses = ["おやすみ～！いい夢を見てね！", "ぐっすり眠ってね～！", "おやすみなさい！ゆっくり休んでね～"]
     response = random.choice(responses)
     await interaction.response.send_message(response)
+
+# Flask部分
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 8080))  # 環境変数 PORT があればそれを使う
+    app.run(host="0.0.0.0", port=port)
 
 # Discord Bot を実行
 bot.run(TOKEN)
