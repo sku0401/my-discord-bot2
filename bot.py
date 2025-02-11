@@ -5,6 +5,7 @@ import random
 import torch
 import datetime
 import asyncio
+import sys
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from flask import Flask
 import threading
@@ -18,13 +19,19 @@ def home():
 
 def run_flask():
     """Flaskを起動し、RenderがWebサービスとして認識するようにする"""
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    port = int(os.getenv("PORT", "8080"))
+    app.run(host="0.0.0.0", port=port)
+
+# Flaskを別スレッドで実行（ボット終了時に自動終了するよう daemon=True を設定）
+flask_thread = threading.Thread(target=run_flask, daemon=True)
+flask_thread.start()
 
 # 環境変数からトークンを取得
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 if not TOKEN:
-    raise ValueError("DISCORD_TOKEN が設定されていません。環境変数を確認してください。")
+    print("ERROR: DISCORD_TOKEN が設定されていません。環境変数を確認してください。")
+    sys.exit(1)
 
 # Discordボット設定
 intents = discord.Intents.default()
@@ -34,12 +41,13 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # 軽量なモデルのロード
 print("軽量モデルをロードしています...")
 try:
+    device = torch.device("cpu")  # 明示的にCPUを指定
     tokenizer = AutoTokenizer.from_pretrained("rinna/japanese-gpt2-small", use_fast=False)
     model = AutoModelForCausalLM.from_pretrained("rinna/japanese-gpt2-small")
 
     # メモリ削減設定
+    model.to(device)  # CPUへ移動
     model.half()  # 半精度化 (float16)
-    model.to("cpu")  # CPUへ移動
     model.eval()  # 推論モード
     print("モデルのロードが完了しました！")
 
@@ -59,7 +67,7 @@ async def shutdown_if_outside_hours():
         if not is_within_active_hours():
             print("指定時間外になったためボットを終了します。")
             await bot.close()
-            os._exit(0)  # プロセスを終了
+            sys.exit(0)  # プロセスを終了
         await asyncio.sleep(600)  # 10分ごとにチェック
 
 @bot.event
@@ -77,7 +85,7 @@ async def talk(interaction: discord.Interaction, user_input: str):
         return
 
     try:
-        inputs = tokenizer(user_input, return_tensors="pt")
+        inputs = tokenizer(user_input, return_tensors="pt").to("cpu")
 
         with torch.no_grad():  # メモリ最適化
             outputs = model.generate(
@@ -141,9 +149,6 @@ async def janken(interaction: discord.Interaction, user_hand: str):
 
     result = results.get((user_hand, bot_hand), "あいこ！")
     await interaction.response.send_message(f"あなた: {user_hand} - ボット: {bot_hand}\n結果: {result}")
-
-# Flaskを別スレッドで実行
-threading.Thread(target=run_flask).start()
 
 # Discord Bot を実行
 bot.run(TOKEN)
