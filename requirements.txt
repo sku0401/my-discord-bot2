@@ -5,3 +5,4 @@ torch>=2.0.0
 tokenizers>=0.14.1
 setuptools>=65.5.0
 wheel
+sentencepiece
