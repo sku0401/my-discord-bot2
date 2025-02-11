@@ -6,4 +6,4 @@ tokenizers==0.13.3
 setuptools>=65.5.0
 wheel
 sentencepiece
-protobuf
+protobuf==3.20.*
