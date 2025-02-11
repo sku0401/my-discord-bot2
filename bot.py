@@ -6,9 +6,11 @@ import torch
 import datetime
 import asyncio
 import sys
+import traceback  # ← エラー詳細表示用
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from flask import Flask
 import threading
+import atexit  # ← 終了処理用
 
 # Flaskアプリの作成
 app = Flask(__name__)
@@ -22,9 +24,12 @@ def run_flask():
     port = int(os.getenv("PORT", "8080"))
     app.run(host="0.0.0.0", port=port)
 
-# Flaskを別スレッドで実行（ボット終了時に自動終了するよう daemon=True を設定）
-flask_thread = threading.Thread(target=run_flask, daemon=True)
+# Flaskを別スレッドで実行
+flask_thread = threading.Thread(target=run_flask)
 flask_thread.start()
+
+# Flaskの終了処理を登録
+atexit.register(lambda: print("Flaskが終了しました。"))
 
 # 環境変数からトークンを取得
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -42,17 +47,17 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 print("軽量モデルをロードしています...")
 try:
     device = torch.device("cpu")  # 明示的にCPUを指定
-    tokenizer = AutoTokenizer.from_pretrained("rinna/japanese-gpt2-small", use_fast=False)
+    tokenizer = AutoTokenizer.from_pretrained("rinna/japanese-gpt2-small", use_fast=True)
     model = AutoModelForCausalLM.from_pretrained("rinna/japanese-gpt2-small")
 
     # メモリ削減設定
     model.to(device)  # CPUへ移動
-    model.half()  # 半精度化 (float16)
     model.eval()  # 推論モード
     print("モデルのロードが完了しました！")
 
 except Exception as e:
-    print(f"モデルのロード中にエラー: {e}")
+    print("モデルのロード中にエラーが発生しました:")
+    traceback.print_exc()  # エラー詳細を表示
     model = None  # モデルが読み込めなかった場合の対策
 
 # 指定時間外ならボットを停止する関数
@@ -85,7 +90,7 @@ async def talk(interaction: discord.Interaction, user_input: str):
         return
 
     try:
-        inputs = tokenizer(user_input, return_tensors="pt").to("cpu")
+        inputs = tokenizer(user_input, return_tensors="pt")
 
         with torch.no_grad():  # メモリ最適化
             outputs = model.generate(
@@ -98,11 +103,10 @@ async def talk(interaction: discord.Interaction, user_input: str):
             )
         response = tokenizer.decode(outputs[0], skip_special_tokens=True)[:2000]
 
-    except torch.cuda.OutOfMemoryError:
-        response = "メモリ不足のため応答できません。"
-
     except Exception as e:
         response = f"エラーが発生しました: {str(e)}"
+        print("talkコマンド実行中にエラー:")
+        traceback.print_exc()  # エラー詳細をログに表示
 
     await interaction.response.send_message(response)
 
