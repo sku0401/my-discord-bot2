@@ -1,4 +1,7 @@
 discord.py==2.3.2
-torch==2.1.0
-transformers==4.36.2
-tokenizers==0.15.0
+flask==2.2.5
+transformers>=4.38.0
+torch>=2.0.0
+tokenizers>=0.14.1
+setuptools>=65.5.0
+wheel
