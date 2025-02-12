@@ -56,8 +56,8 @@ async def on_message(message):
     response = random.choice(talk_responses)
 
     # メスガキ口調対応
-    if user_id in user_styles and user_styles[user_id] == "mesugaki":
-        response = "うるさいにゃん！こっち来いよ、早くにゃ！"
+    if user_id in user_styles and user_styles[user_id] == "nyan":
+        response = "どうしたにゃん？"
 
     await message.channel.send(response)
 
@@ -98,7 +98,7 @@ async def help_command(interaction: discord.Interaction):
     **コマンド一覧**
     - `/dice <n>d<m>`: n個のm面のダイスを振る (例: `/dice 2d6`)
     - `/janken`: じゃんけんをする
-    - `/mesugaki`: メスガキ口調になる
+    - `/nyan`: 猫のような口調になる
     - `/reset`: 口調を元に戻す
     - `/help`: コマンド一覧を表示
     """
