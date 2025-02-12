@@ -1,159 +1,121 @@
 import discord
 from discord.ext import commands
 import random
-import asyncio
+import json
 import os
 from dotenv import load_dotenv
-from flask import Flask
 
-# .envファイルを読み込む
+# .envファイルから設定を読み込む
 load_dotenv()
-TOKEN = os.getenv("DISCORD_TOKEN")
 
-# Discordボット設定
+# ボットのインスタンスとインテント設定
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# 会話の状態を管理
-talking_users = {}
-
-# 初期の口調
-tone = "normal"
+# ユーザーごとの会話履歴管理用
+user_states = {}
 
 # ランダムな会話リスト
 talk_responses = [
-    "こんにちはっ！元気だった？",
-    "やっほ～！今日はどんな一日だったかな？",
-    "お疲れさま～！今日はどうだった？",
-    "こんちゃ～！最近何か楽しいことあった？",
-    "やっほ！何かお話ししたいことあったら教えてね♪",
-    "おっす！元気そうだね！",
-    "こんにちは～！今日は何をしてるのかな？",
-    "あ～、なんかドキドキしちゃう！何か話してくれるかな？",
-    "おつかれさま～！どうしたの？",
-    "こんにちはっ！お話ししようよ～！",
-    "やっほ～！最近どう？",
-    "おっ！元気そうだね、嬉しいな！",
-    "えへへ、こんにちは！今日も元気にいこうね！",
-    "やったー！会えて嬉しいよ～！",
-    "こんにちはーっ！なんか面白いことないかな？",
-    "わーい、久しぶりに会えたね！どうだった最近？",
-    "こんにちはっ！今日は何をしてるの～？",
-    "やっほ～！最近何か面白いことあった？",
-    "おー、こんにちは～！元気？",
-    "こんちゃ～！何かお話ししようよ～♪",
-    "こんにちはっ！最近どうかな？",
-    "やっほ～！元気そうでよかった♪",
-    "お疲れさま～！今日はどうだった～？",
-    "あ～、なんだかドキドキするよ～！",
-    "こんにちは～！今日もよろしくね！",
-    "やった！会えて嬉しいよ！",
-    "おっす！今日も楽しくお話ししようね！",
-    "やっほ～！どうしたんだい？",
-    "こんにちは！今日は何か面白いことあったかな？",
-    "お疲れ様～！どうしたの～？",
-    "こんにちは！今日は何してるの～？",
-    "おー！こんにちは～！何か話そうよ～",
-    "やっほ！今日はどんなことしてるの～？",
-    "こんにちはっ！あっ、もしかしてお話したいことがあるの？",
-    "えへへ、元気だよ！何か話してくれるかな？",
-    "こんにちは～！最近どうしてたのかな？",
-    "やっほ～！今日も楽しく過ごしてる？",
-    "おつかれさま～！最近何してたの～？",
-    "こんにちは！今日はどんなことしてるのかな～？",
-    "やっほ！最近どうだった～？",
-    "こんにちはっ！今日は楽しいことあった～？",
-    "やっほ～！元気そうでよかった～！",
-    "お疲れ様～！今日はどんな一日だったかな？",
-    "こんにちはっ！今日は何してるのかな～？",
-    "やっほ～！お話ししたいことがあったら言ってね！"
+    "こんにちは！今日はどうだった？",
+    "元気だった？最近何か面白いことあった？",
+    "お疲れ様～！今日はどんな感じだったかな？",
+    "やっほ！最近どうしてたの～？",
+    "こんにちはっ！今日も元気にいこうね！"
 ]
 
-# 口調ごとの変化
-def get_tone_response(response):
-    global tone
-    if tone == "casual":
-        return response + " えへへ、どうしたの～？"
-    elif tone == "formal":
-        return "お疲れ様です。何かお話があればお聞きします。"
-    return response + " なんだか嬉しいな～"
+# 会話履歴から次の言葉をマルコフ連鎖で生成
+def generate_response_from_history(user_id):
+    conversation_history = get_user_state(user_id)['conversation']
+    if len(conversation_history) < 2:
+        return random.choice(talk_responses)
 
-# ボット準備完了時の処理
-@bot.event
-async def on_ready():
-    await bot.tree.sync()
-    print(f"ログインしました: {bot.user}")
+    # マルコフ連鎖風に次の単語を生成
+    last_message = conversation_history[-1]
+    if "元気" in last_message:
+        return "えへへ、元気だよ～！"
+    elif "お疲れ様" in last_message:
+        return "ありがとう！今日はちょっと疲れたけど元気だよ～！"
+    else:
+        return random.choice(talk_responses)
 
-# ボットがメンションされた時の会話
+# ユーザーの会話履歴更新
+def update_user_state(user_id, message):
+    if user_id not in user_states:
+        user_states[user_id] = {'conversation': []}
+    user_states[user_id]['conversation'].append(message)
+
+# ユーザーの会話履歴取得
+def get_user_state(user_id):
+    return user_states.get(user_id, {'conversation': []})
+
+# メスガキ口調の管理
+user_styles = {}
+
+# メスガキコマンド
+@bot.command(name="mesugaki")
+async def mesugaki(ctx):
+    user_styles[ctx.author.id] = "mesugaki"
+    await ctx.send(f"{ctx.author.name}はメスガキ口調になったにゃん！")
+
+# リセットコマンド
+@bot.command(name="reset")
+async def reset(ctx):
+    if ctx.author.id in user_styles:
+        del user_styles[ctx.author.id]
+    await ctx.send(f"{ctx.author.name}の口調が元に戻ったにゃん！")
+
+# ボットがメンションされた時の会話処理
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    if bot.user in message.mentions:
-        user_id = message.author.id
-        talking_users[user_id] = asyncio.time()
+    user_id = message.author.id
+    update_user_state(user_id, message.content)
 
-        response = get_tone_response(random.choice(talk_responses))
-        await message.channel.send(response)
+    # メスガキ口調に変更
+    if user_id in user_styles and user_styles[user_id] == "mesugaki":
+        response = "うるさいにゃん！こっち来いよ、早くにゃ！"
+    else:
+        response = generate_response_from_history(user_id)
 
-        async def end_conversation():
-            await asyncio.sleep(30)
-            if user_id in talking_users:
-                last_time = talking_users[user_id]
-                if asyncio.time() - last_time >= 30:
-                    del talking_users[user_id]
-                    await message.channel.send("えへへ、そろそろお話終わりかな～？また話しかけてね♪")
+    await message.channel.send(response)
 
-        asyncio.create_task(end_conversation())
-
-    elif message.author.id in talking_users:
-        talking_users[message.author.id] = asyncio.time()
-        response = get_tone_response(random.choice(talk_responses))
-        await message.channel.send(response)
-
-    await bot.process_commands(message)
-
-# /talk コマンド
-@bot.tree.command(name="talk", description="ランダムでおっとり系の会話をする")
-async def talk(interaction: discord.Interaction):
-    response = get_tone_response(random.choice(talk_responses))
-    await interaction.response.send_message(response)
-
-# /gacha コマンド
-@bot.tree.command(name="gacha", description="ガチャを引いて結果を表示")
-async def gacha(interaction: discord.Interaction):
-    items = ["決意", "忍耐", "勇気", "誠実", "不屈", "親切", "正義"]
-    result = random.choice(items)
-    await interaction.response.send_message(f"わぁ～！あなたが引いたのは「{result}」だよ～！")
-
-# /nyan コマンド
-@bot.tree.command(name="nyan", description="猫のように応答する")
-async def nyan(interaction: discord.Interaction):
-    responses = ["にゃ～ん！", "にゃんにゃん♪", "ゴロゴロ…にゃん！", "にゃ～ん、いっしょに遊ぼうよ！"]
-    response = random.choice(responses)
-    await interaction.response.send_message(response)
-
-# /dice コマンド
-@bot.tree.command(name="dice", description="指定したダイスをロールして結果を表示")
-async def dice(interaction: discord.Interaction, dice_input: str):
+# ダイスロールコマンド
+@bot.command(name="dice")
+async def dice(ctx, dice_input: str):
     try:
         num_dice, dice_sides = map(int, dice_input.split('d'))
         rolls = [random.randint(1, dice_sides) for _ in range(num_dice)]
         total = sum(rolls)
         roll_result = ', '.join(map(str, rolls))
-        await interaction.response.send_message(f"ロール結果は：{roll_result} (合計: {total}) だよ～！")
+        await ctx.send(f"ロール結果は：{roll_result} (合計: {total}) だよ～！")
     except ValueError:
-        await interaction.response.send_message("うーん、入力形式が違うみたい。「2d6」みたいに入力してね！")
+        await ctx.send("うーん、入力形式が違うみたい。「2d6」みたいに入力してね！")
 
-# /janken コマンド
-@bot.tree.command(name="janken", description="じゃんけんをする (グー, チョキ, パー)")
-async def janken(interaction: discord.Interaction, user_hand: str):
-    if user_hand not in ["グー", "チョキ", "パー"]:
-        await interaction.response.send_message("「グー」「チョキ」「パー」から選んでね！")
+# じゃんけん（ボタン選択）
+@bot.command(name="janken")
+async def janken(ctx):
+    buttons = [
+        discord.ui.Button(label="グー", custom_id="rock"),
+        discord.ui.Button(label="チョキ", custom_id="scissors"),
+        discord.ui.Button(label="パー", custom_id="paper")
+    ]
+    view = discord.ui.View()
+    for button in buttons:
+        view.add_item(button)
+
+    await ctx.send("じゃんけんをしよう！選んでね～", view=view)
+
+# じゃんけん結果処理
+@bot.event
+async def on_button_click(interaction):
+    if interaction.user.bot:
         return
 
+    user_hand = interaction.custom_id
     hands = ["グー", "チョキ", "パー"]
     bot_hand = random.choice(hands)
 
@@ -169,42 +131,18 @@ async def janken(interaction: discord.Interaction, user_hand: str):
     result = results.get((user_hand, bot_hand), "あいこだね～！")
     await interaction.response.send_message(f"あなた: {user_hand} - ボット: {bot_hand}\n結果: {result}")
 
-# /compliment コマンド
-@bot.tree.command(name="compliment", description="褒めるメッセージをランダムで表示")
-async def compliment(interaction: discord.Interaction):
-    responses = [
-        "すごいね～！あなたって本当に素敵だな♪",
-        "うわぁ、あなたってなんて凄いんだろう！",
-        "あっ、あなたの笑顔最高！癒される～",
-        "よく頑張ったね！すごいよ～！"
-    ]
-    response = random.choice(responses)
-    await interaction.response.send_message(response)
+# ヘルプ（コマンド一覧）
+@bot.command(name="help")
+async def help(ctx):
+    help_text = """
+    コマンド一覧:
+    - !dice <n>d<m>: n個のm面のダイスを振る
+    - !janken: じゃんけんをする
+    - !help: コマンド一覧を表示
+    - !mesugaki: メスガキ口調になる
+    - !reset: 口調を元に戻す
+    """
+    await ctx.send(help_text)
 
-# /hug コマンド
-@bot.tree.command(name="hug", description="ハグをランダムで送る")
-async def hug(interaction: discord.Interaction):
-    responses = ["ギュー！", "ふふっ、ぎゅっ！"]
-    response = random.choice(responses)
-    await interaction.response.send_message(response)
-
-# /sleep コマンド
-@bot.tree.command(name="sleep", description="おやすみメッセージを送る")
-async def sleep(interaction: discord.Interaction):
-    responses = ["おやすみ～！いい夢を見てね！", "ぐっすり眠ってね～！", "おやすみなさい！ゆっくり休んでね～"]
-    response = random.choice(responses)
-    await interaction.response.send_message(response)
-
-# Flask部分
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Bot is running!"
-
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8080))  # 環境変数 PORT があればそれを使う
-    app.run(host="0.0.0.0", port=port)
-
-# Discord Bot を実行
-bot.run(TOKEN)
+# ボット起動
+bot.run(os.getenv("DISCORD_TOKEN"))
