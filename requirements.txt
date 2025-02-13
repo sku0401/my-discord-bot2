@@ -1,5 +1,4 @@
+transformers
 discord.py
-python-dotenv
 flask
-pip install transformers
-pip install torch
+python-dotenv
