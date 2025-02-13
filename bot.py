@@ -8,6 +8,7 @@ from flask import Flask
 import threading
 from collections import defaultdict
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
+import torch
 
 # .envファイルから設定を読み込む
 load_dotenv()
@@ -39,21 +40,17 @@ user_styles = {}
 # 設定した会話チャンネル
 chat_channels = {}
 
-# 軽量モデルdistilgpt2を使用
+# Hugging Faceのモデルをローカルで使用
 model_name = "distilgpt2"
 model = GPT2LMHeadModel.from_pretrained(model_name)
 tokenizer = GPT2Tokenizer.from_pretrained(model_name)
 
-# チャットボット関数
 def chat_with_bot(user_input):
     inputs = tokenizer(user_input, return_tensors="pt")
-    outputs = model.generate(**inputs, max_length=50, num_return_sequences=1, no_repeat_ngram_size=2, top_p=0.95, temperature=0.7)
+    with torch.no_grad():  # メモリ節約のため勾配計算を無効化
+        outputs = model.generate(**inputs, max_length=50, num_return_sequences=1, no_repeat_ngram_size=2, top_p=0.95, temperature=0.7)
     response = tokenizer.decode(outputs[0], skip_special_tokens=True)
     return response[len(user_input):].strip()
-
-# 会話履歴を更新
-def update_user_state(user_id, message):
-    user_states[user_id]["conversation"].append(message)
 
 # メッセージイベント: 会話システム
 @bot.event
@@ -66,13 +63,12 @@ async def on_message(message):
         return
 
     user_id = message.author.id
-    update_user_state(user_id, message.content)
+    user_states[user_id]["conversation"].append(message.content)
 
     response = chat_with_bot(message.content)
-
     if user_styles.get(user_id) == "nyan":
         response += " " + random.choice(["にゃん", "だにゃ", "なのにゃ", "にゃー！", "だよにゃ！"])
-
+    
     await message.channel.send(response)
 
 # スラッシュコマンドの登録
@@ -117,7 +113,7 @@ async def dice(interaction: discord.Interaction, dice_input: str):
 # スラッシュコマンドの同期 & 起動メッセージ
 @bot.event
 async def on_ready():
-    await tree.sync()  # スラッシュコマンドを同期
+    await tree.sync()
     print(f"✅ ログインしました: {bot.user}")
     await bot.change_presence(activity=discord.Game(name="お話し中..."))
 
