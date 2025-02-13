@@ -1,4 +1,5 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
 import random
 import os
@@ -28,7 +29,8 @@ t.start()
 # Botのインスタンス
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix=commands.when_mentioned_or("/"), intents=intents)
+tree = bot.tree  # スラッシュコマンド用
 
 # ユーザーごとの会話履歴管理 & 状態管理
 user_states = defaultdict(lambda: {"conversation": []})
@@ -37,23 +39,16 @@ user_styles = {}
 # 設定した会話チャンネル
 chat_channels = {}
 
-# GPT-2モデルとトークナイザーをロード
-model_name = "gpt2"  # より軽量な「distilgpt2」なども使えます
+# 軽量モデルdistilgpt2を使用
+model_name = "distilgpt2"
 model = GPT2LMHeadModel.from_pretrained(model_name)
 tokenizer = GPT2Tokenizer.from_pretrained(model_name)
 
 # チャットボット関数
 def chat_with_bot(user_input):
-    # ユーザーの入力をトークン化
     inputs = tokenizer(user_input, return_tensors="pt")
-
-    # モデルを使って応答を生成
-    outputs = model.generate(**inputs, max_length=100, num_return_sequences=1, no_repeat_ngram_size=2, top_p=0.95, temperature=0.7)
-    
-    # 出力をデコードして返答
+    outputs = model.generate(**inputs, max_length=50, num_return_sequences=1, no_repeat_ngram_size=2, top_p=0.95, temperature=0.7)
     response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    
-    # 応答の最初にユーザーの入力が含まれているので、それを取り除く
     return response[len(user_input):].strip()
 
 # 会話履歴を更新
@@ -68,47 +63,44 @@ async def on_message(message):
 
     guild_id = message.guild.id if message.guild else None
     if guild_id and guild_id in chat_channels and message.channel.id != chat_channels[guild_id]:
-        return  # 設定したチャンネル以外では会話しない
+        return
 
     user_id = message.author.id
     update_user_state(user_id, message.content)
 
-    # GPT-2モデルを使って応答を生成
     response = chat_with_bot(message.content)
 
-    # 「にゃん」語尾を追加
     if user_styles.get(user_id) == "nyan":
         response += " " + random.choice(["にゃん", "だにゃ", "なのにゃ", "にゃー！", "だよにゃ！"])
 
     await message.channel.send(response)
-    await bot.process_commands(message)  # 他のコマンドも処理
 
-# スラッシュコマンドの処理
-@bot.command(name="nyan", help="語尾がにゃん風になる")
-async def nyan(ctx):
-    user_styles[ctx.author.id] = "nyan"
-    await ctx.send(f"{ctx.author.name}の語尾がにゃん風になったにゃん！")
+# スラッシュコマンドの登録
+@tree.command(name="nyan", description="語尾がにゃん風になる")
+async def nyan(interaction: discord.Interaction):
+    user_styles[interaction.user.id] = "nyan"
+    await interaction.response.send_message(f"{interaction.user.name}の語尾がにゃん風になったにゃん！")
 
-@bot.command(name="reset", help="口調を元に戻す")
-async def reset(ctx):
-    user_styles.pop(ctx.author.id, None)
-    await ctx.send(f"{ctx.author.name}の口調が元に戻ったよ！")
+@tree.command(name="reset", description="口調を元に戻す")
+async def reset(interaction: discord.Interaction):
+    user_styles.pop(interaction.user.id, None)
+    await interaction.response.send_message(f"{interaction.user.name}の口調が元に戻ったよ！")
 
-@bot.command(name="setchannel", help="このチャンネルを会話チャンネルに設定する")
-async def setchannel(ctx):
-    chat_channels[ctx.guild.id] = ctx.channel.id
-    await ctx.send("このチャンネルを会話チャンネルに設定したよ！")
+@tree.command(name="setchannel", description="このチャンネルを会話チャンネルに設定する")
+async def setchannel(interaction: discord.Interaction):
+    chat_channels[interaction.guild.id] = interaction.channel.id
+    await interaction.response.send_message("このチャンネルを会話チャンネルに設定したよ！")
 
-@bot.command(name="unsetchannel", help="会話チャンネルの設定を解除する")
-async def unsetchannel(ctx):
-    if ctx.guild.id in chat_channels:
-        del chat_channels[ctx.guild.id]
-        await ctx.send("会話チャンネルの設定を解除したよ！")
+@tree.command(name="unsetchannel", description="会話チャンネルの設定を解除する")
+async def unsetchannel(interaction: discord.Interaction):
+    if interaction.guild.id in chat_channels:
+        del chat_channels[interaction.guild.id]
+        await interaction.response.send_message("会話チャンネルの設定を解除したよ！")
     else:
-        await ctx.send("会話チャンネルはまだ設定されていないよ！")
+        await interaction.response.send_message("会話チャンネルはまだ設定されていないよ！")
 
-@bot.command(name="dice", help="n個のm面のダイスを振る (例: 2d6)")
-async def dice(ctx, dice_input: str):
+@tree.command(name="dice", description="n個のm面のダイスを振る (例: 2d6)")
+async def dice(interaction: discord.Interaction, dice_input: str):
     try:
         num_dice, dice_sides = map(int, dice_input.lower().split('d'))
         if num_dice < 1 or dice_sides < 1:
@@ -117,14 +109,15 @@ async def dice(ctx, dice_input: str):
         rolls = [random.randint(1, dice_sides) for _ in range(num_dice)]
         total = sum(rolls)
         roll_result = ', '.join(map(str, rolls))
-        await ctx.send(f"🎲 ロール結果: {roll_result} (合計: {total})")
+        await interaction.response.send_message(f"🎲 ロール結果: {roll_result} (合計: {total})")
     
     except ValueError:
-        await ctx.send("⚠️ 入力形式が間違ってるよ！「2d6」みたいに入力してね！")
+        await interaction.response.send_message("⚠️ 入力形式が間違ってるよ！「2d6」みたいに入力してね！")
 
 # スラッシュコマンドの同期 & 起動メッセージ
 @bot.event
 async def on_ready():
+    await tree.sync()  # スラッシュコマンドを同期
     print(f"✅ ログインしました: {bot.user}")
     await bot.change_presence(activity=discord.Game(name="お話し中..."))
 
