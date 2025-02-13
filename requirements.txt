@@ -2,3 +2,4 @@ discord.py
 flask
 transformers
 gunicorn
+python-dotenv
