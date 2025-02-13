@@ -1,6 +1,4 @@
-transformers
 discord.py
 flask
-python-dotenv
-torch
+transformers
 gunicorn
