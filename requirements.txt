@@ -3,3 +3,4 @@ discord.py
 flask
 python-dotenv
 torch
+gunicorn
