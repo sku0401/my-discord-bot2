@@ -1,5 +1,5 @@
-discord.py
-flask
+torch==2.0.0
 transformers
-gunicorn
+flask
+discord.py
 python-dotenv
