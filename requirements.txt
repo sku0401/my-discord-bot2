@@ -1,5 +1,5 @@
-torch==2.0.0
-transformers
-flask
 discord.py
-python-dotenv
+google-api-python-client
+PyNaCl
+yt-dpl
+python-dontenv
